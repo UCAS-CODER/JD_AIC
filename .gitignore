@@ -103,3 +103,4 @@ ENV/
 [plain] view plaincopy
 #不上传数据文件
 *.csv
+*.zip
