@@ -99,3 +99,7 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+[plain] view plaincopy
+#过滤数据库文件
+*.csv
