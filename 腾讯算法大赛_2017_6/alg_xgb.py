@@ -13,14 +13,14 @@ import numpy as np
 
 now = time.time()
 traincsv = pd.read_csv("./pre/train.csv") # 注意自己数据路径
-adcsv = pd.read_csv("./pre/ad.csv")
-usercsv = pd.read_csv("./pre/user.csv")
-positioncsv = pd.read_csv("./pre/position.csv")
-categorycsv = pd.read_csv("./pre/app_categories.csv")
+adcsv = pd.read_csv("./pre/ad.csv")  # 广告
+usercsv = pd.read_csv("./pre/user.csv")  # 用户
+positioncsv = pd.read_csv("./pre/position.csv")  #  位置
+categorycsv = pd.read_csv("./pre/app_categories.csv")  # 种类
 usercatecsv = pd.read_csv("./pre/new/usercate.csv")
 usercatecsv = usercatecsv.drop(['Unnamed: 0'],axis=1)
     
-
+#  表的拼接
 dataset = pd.merge(traincsv, adcsv, how='inner', on='creativeID',sort=False,  
           suffixes=('_x', '_y'), copy=True, indicator=False)  
 dataset = pd.merge(dataset, usercsv, how='inner', on='userID',sort=False,  
@@ -33,11 +33,13 @@ dataset = pd.merge(dataset, usercatecsv, how='inner', on='userID',sort=False,
           suffixes=('_x', '_y'), copy=True, indicator=False) 
 dataset = dataset.drop(['conversionTime'],axis=1) 
 
+#  数据隔3取1，为了避免内存不够，训练数据丢掉第一列
 train = dataset.iloc[::3,1:]
 labels = dataset.iloc[::3,0].values
 
 
 testcsv = pd.read_csv("./pre/test.csv") # 注意自己数据路径
+#  测试数据拼接表格
 tests = pd.merge(testcsv, adcsv, how='inner', on='creativeID',sort=False,  
           suffixes=('_x', '_y'), copy=True, indicator=False)  
 tests = pd.merge(tests, usercsv, how='inner', on='userID',sort=False,  
@@ -61,6 +63,7 @@ del(usercatecsv)
 test = tests.iloc[:,2:]
 tests = tests[['instanceID','label']]
 
+#  处理时间特征
 train.iloc[:,0] = train.iloc[:,0].values%10000/100*60+train.iloc[:,0]%100 #clickTime中将点击时间在每天的分钟数作为特征
 test.iloc[:,0] = test.iloc[:,0].values%10000/100*60+test.iloc[:,0]%100
 
@@ -73,6 +76,7 @@ test.iloc[:,0] = test.iloc[:,0].values%10000/100*60+test.iloc[:,0]%100
         
 from sklearn.preprocessing import OneHotEncoder
 ohe = OneHotEncoder()
+#  类别特征onehot处理
 cat_train = train.iloc[:,[4,5,10,12,13,14,15,19,20]]
 cat_train_matrix = ohe.fit_transform(cat_train).toarray()
 del(cat_train)
@@ -91,6 +95,8 @@ del(cat_train)
 #dict_vec = DictVectorizer(sparse=False)
 #cat_train_matrix = dict_vec.fit_transform(cat_train.to_dict(orient='record'))
 #del(cat_train)
+
+#  拼接数值特征和onehot特征
 train = np.hstack((train.iloc[:,[0,1,2,3,6,7,8,9,11,16,17,18,21,22,23,24,25,26,
                                  27,28,29,30,31,32,33,34]].values,cat_train_matrix))
 del(cat_train_matrix)
@@ -109,16 +115,19 @@ del(cat_train_matrix)
 #test.iloc[:,19] = ','.join(str(i) for i in test.iloc[:,19]).split(',')
 #test.iloc[:,20] = ','.join(str(i) for i in test.iloc[:,20]).split(',')
 
+#  测试数据类别特征onehot处理
 cat_test = test.iloc[:,[4,5,10,12,13,14,15,19,20]]
 cat_test_matrix = ohe.transform(cat_test).toarray()
 #cat_test_matrix = ohe.transform(cat_test).toarray()
 del(cat_test)
 
+#  拼接特征
 test = np.hstack((test.iloc[:,[0,1,2,3,6,7,8,9,11,16,17,18,21,22,23,24,25,26,
                                  27,28,29,30,31,32,33,34]].values,cat_test_matrix))
 del(cat_test_matrix)
 #test = scaler.transform(test)
-    
+
+#  选择这些列的特征，是根据之前训练结果的特征贡献度选取的
 feat_index = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,27,28,32,33,34,
               37,38,39,40,41,42,43,44,45,48,49,50,51,52,53,59,69,70,
               72,75,76,77]
@@ -158,7 +167,9 @@ plst = list(params.items())
 
 #Using 10000 rows for early stopping. 
 #offset = 1000000  # 训练集中数据50000，划分35000用作训练，15000用作验证
-num_rounds = 5000 # 迭代你次数
+num_rounds = 5000 # 迭代拟次数
+
+#  pandas格式转成xgboost格式的矩阵
 xgtest = xgb.DMatrix(test)
 
 # 划分训练集与验证集 
@@ -172,10 +183,12 @@ watchlist = [(xgtrain, 'train'),(xgval, 'val')]
 # training model 
 # early_stopping_rounds 当设置的迭代次数较大时，early_stopping_rounds 可在一定的迭代次数内准确率没有提升就停止训练
 model = xgb.train(plst, xgtrain, num_rounds, watchlist,early_stopping_rounds=20)
+# 保存模型的时间
 savetime = time.strftime('%m%d_%H:%M',time.localtime(time.time()))
 model.save_model('./model/xgb_'+ savetime +'.model') # 用于存储训练出的模型
 preds = model.predict(xgtest,ntree_limit=model.best_iteration)
 
+#  选取测试数据的列，做为提交的文件
 tests['label'] = preds
 submission = tests[['instanceID','label']]
 submission.sort_values(by='instanceID',ascending=True,inplace=True)
