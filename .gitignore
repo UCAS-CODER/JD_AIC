@@ -104,3 +104,6 @@ ENV/
 #不上传数据文件
 *.csv
 *.zip
+*.model
+model/
+submission
