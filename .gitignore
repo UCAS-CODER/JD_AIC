@@ -105,5 +105,7 @@ ENV/
 *.csv
 *.zip
 *.model
+*.bak
 model/
 submission
+.idea/
